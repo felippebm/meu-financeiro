@@ -10,12 +10,20 @@ import { Icon } from "@/components/dashboard/icon";
 type MovementFormDialogProps = {
   type: "income" | "expense";
   onCancel: () => void;
-  onSave: (movement: NewMovement) => void;
+  onSave: (movement: NewMovement) => Promise<string | null>;
 };
+
+function formatDateDisplay(isoDate: string): string {
+  const [year, month, day] = isoDate.split("-");
+  return year && month && day ? `${day}/${month}/${year}` : "";
+}
 
 export function MovementFormDialog({ type, onCancel, onSave }: MovementFormDialogProps) {
   const descriptionRef = useRef<HTMLInputElement>(null);
+  const dateInputRef = useRef<HTMLInputElement>(null);
+  const [dateValue, setDateValue] = useState("");
   const [formError, setFormError] = useState("");
+  const [isSaving, setIsSaving] = useState(false);
   const isIncome = type === "income";
   const categories = isIncome ? incomeCategories : expenseCategories;
 
@@ -37,7 +45,7 @@ export function MovementFormDialog({ type, onCancel, onSave }: MovementFormDialo
     };
   }, [onCancel]);
 
-  function handleSubmit(event: FormEvent<HTMLFormElement>) {
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const formData = new FormData(event.currentTarget);
     const description = String(formData.get("description") ?? "").trim();
@@ -58,7 +66,15 @@ export function MovementFormDialog({ type, onCancel, onSave }: MovementFormDialo
       return;
     }
 
-    onSave({ description, amount, date, category, account, observation });
+    setIsSaving(true);
+    try {
+      const error = await onSave({ description, amount: amountInput, date, category, account, observation });
+      if (error) setFormError(error);
+    } catch {
+      setFormError("Não foi possível salvar. Tente novamente.");
+    } finally {
+      setIsSaving(false);
+    }
   }
 
   return (
@@ -141,16 +157,39 @@ export function MovementFormDialog({ type, onCancel, onSave }: MovementFormDialo
             </div>
 
             <div>
-              <label htmlFor="movement-date" className="mb-1.5 block text-sm font-medium text-slate-700">
+              <label htmlFor="movement-date-display" className="mb-1.5 block text-sm font-medium text-slate-700">
                 Data <span className="text-rose-600">*</span>
               </label>
               <input
+                id="movement-date-display"
+                type="text"
+                value={formatDateDisplay(dateValue)}
+                placeholder="DD/MM/AAAA"
+                aria-label="Data no formato dia, mês e ano"
+                readOnly
+                required
+                onClick={() => dateInputRef.current?.showPicker()}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter" || event.key === " ") {
+                    event.preventDefault();
+                    dateInputRef.current?.showPicker();
+                  }
+                }}
+                className="h-11 w-full cursor-pointer rounded-xl border border-slate-200 bg-white px-3.5 text-sm text-slate-700 outline-none transition placeholder:text-slate-400 focus:border-emerald-600 focus:ring-3 focus:ring-emerald-600/10"
+              />
+              <input
+                ref={dateInputRef}
                 id="movement-date"
                 name="date"
                 type="date"
-                required
-                className="h-11 w-full rounded-xl border border-slate-200 bg-white px-3.5 text-sm text-slate-700 outline-none transition focus:border-emerald-600 focus:ring-3 focus:ring-emerald-600/10"
-                onChange={() => setFormError("")}
+                value={dateValue}
+                tabIndex={-1}
+                aria-hidden="true"
+                onChange={(event) => {
+                  setDateValue(event.currentTarget.value);
+                  setFormError("");
+                }}
+                className="sr-only"
               />
             </div>
 
@@ -219,10 +258,11 @@ export function MovementFormDialog({ type, onCancel, onSave }: MovementFormDialo
             </button>
             <button
               type="submit"
+              disabled={isSaving}
+              aria-busy={isSaving}
               className="inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-emerald-700 px-5 text-sm font-semibold text-white shadow-sm transition hover:bg-emerald-800 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-700"
             >
-              <Icon name="plus" className="size-4" />
-              Salvar {isIncome ? "receita" : "despesa"}
+              {isSaving ? "Salvando…" : <><Icon name="plus" className="size-4" /> Salvar {isIncome ? "receita" : "despesa"}</>}
             </button>
           </div>
         </form>

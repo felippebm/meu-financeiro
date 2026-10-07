@@ -11,7 +11,7 @@ export type SpendingCategory = {
 };
 
 export type Transaction = {
-  id: number;
+  id: string | number;
   description: string;
   category: string;
   date: string;
@@ -21,7 +21,27 @@ export type Transaction = {
   observation?: string;
 };
 
-export type NewMovement = Omit<Transaction, "id" | "type">;
+export type NewMovement = Omit<Transaction, "id" | "type" | "amount" | "account"> & {
+  amount: string;
+  account: string;
+};
+
+export type DashboardSummary = {
+  income: number;
+  expenses: number;
+  balance: number;
+};
+
+export type DashboardSnapshot = {
+  summary: DashboardSummary;
+  categories: SpendingCategory[];
+  monthlyEvolution: MonthlyTotal[];
+  transactions: Transaction[];
+};
+
+export type PersistMovementResult =
+  | { ok: true; snapshot: DashboardSnapshot }
+  | { ok: false; error: string };
 
 export const incomeCategories = [
   "Salário",

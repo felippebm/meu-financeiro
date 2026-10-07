@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState, type ReactNode } from "react";
+import { persistMovement } from "@/app/actions/transactions";
 import { CategorySpending } from "@/components/dashboard/category-spending";
 import { DashboardActions } from "@/components/dashboard/dashboard-actions";
 import { FinancialEvolution } from "@/components/dashboard/financial-evolution";
@@ -8,46 +9,17 @@ import { Icon } from "@/components/dashboard/icon";
 import { MovementFormDialog } from "@/components/dashboard/movement-form-dialog";
 import { RecentTransactions } from "@/components/dashboard/recent-transactions";
 import { SummaryCard } from "@/components/dashboard/summary-card";
-import type { MonthlyTotal, NewMovement, SpendingCategory, Transaction } from "@/data/dashboard";
+import type { DashboardSnapshot, NewMovement } from "@/data/dashboard";
 
 type DashboardClientProps = {
   header: ReactNode;
-  categories: SpendingCategory[];
-  monthlyEvolution: MonthlyTotal[];
-  initialSummary: { income: number; expenses: number; balance: number };
-  initialTransactions: Transaction[];
+  initialData: DashboardSnapshot;
 };
 
-const monthNames = ["jan", "fev", "mar", "abr", "mai", "jun", "jul", "ago", "set", "out", "nov", "dez"];
-
-function formatTransactionDate(date: string): string {
-  const [year, month, day] = date.split("-");
-  const monthName = monthNames[Number(month) - 1];
-
-  return `${day} ${monthName}, ${year}`;
-}
-
-export function DashboardClient({
-  header,
-  categories,
-  monthlyEvolution,
-  initialSummary,
-  initialTransactions,
-}: DashboardClientProps) {
-  const [transactions, setTransactions] = useState(initialTransactions);
-  const [addedIncomeCents, setAddedIncomeCents] = useState(0);
-  const [addedExpenseCents, setAddedExpenseCents] = useState(0);
-  const [addedExpenseCategoryCents, setAddedExpenseCategoryCents] = useState<Record<string, number>>({});
+export function DashboardClient({ header, initialData }: DashboardClientProps) {
+  const [data, setData] = useState(initialData);
   const [activeForm, setActiveForm] = useState<"income" | "expense" | null>(null);
   const [confirmation, setConfirmation] = useState("");
-
-  const incomeTotal = initialSummary.income + addedIncomeCents / 100;
-  const expenseTotal = initialSummary.expenses + addedExpenseCents / 100;
-  const balance = incomeTotal - expenseTotal;
-  const updatedCategories = categories.map((category) => ({
-    ...category,
-    amount: category.amount + (addedExpenseCategoryCents[category.name] ?? 0) / 100,
-  }));
 
   useEffect(() => {
     if (!confirmation) return;
@@ -56,51 +28,23 @@ export function DashboardClient({
     return () => window.clearTimeout(timeoutId);
   }, [confirmation]);
 
-  const handleCancelIncome = useCallback(() => {
+  const handleCancel = useCallback(() => {
     setActiveForm(null);
   }, []);
 
-  function handleSaveMovement(movement: NewMovement) {
-    if (!activeForm) return;
+  async function handleSaveMovement(movement: NewMovement): Promise<string | null> {
+    if (!activeForm) return "Selecione o tipo de movimentação e tente novamente.";
 
-    const movementType = activeForm;
-    const amountCents = Math.round(movement.amount * 100);
-    setTransactions((currentTransactions) => {
-      const nextId = currentTransactions.reduce(
-        (highestId, transaction) => Math.max(highestId, transaction.id),
-        0,
-      ) + 1;
+    const result = await persistMovement(activeForm, movement);
+    if (!result.ok) return result.error;
 
-      return [
-        {
-          ...movement,
-          amount: amountCents / 100,
-          id: nextId,
-          date: formatTransactionDate(movement.date),
-          type: movementType,
-        },
-        ...currentTransactions,
-      ];
-    });
-    if (movementType === "income") {
-      setAddedIncomeCents((currentTotal) => currentTotal + amountCents);
-      setConfirmation("Receita adicionada com sucesso.");
-    } else {
-      setAddedExpenseCents((currentTotal) => currentTotal + amountCents);
-      setAddedExpenseCategoryCents((currentAmounts) => ({
-        ...currentAmounts,
-        [movement.category]: (currentAmounts[movement.category] ?? 0) + amountCents,
-      }));
-      setConfirmation("Despesa adicionada com sucesso.");
-    }
+    setData(result.snapshot);
     setActiveForm(null);
+    setConfirmation(activeForm === "income"
+      ? "Receita adicionada com sucesso."
+      : "Despesa adicionada com sucesso.");
+    return null;
   }
-
-  const currentMonthEvolution = monthlyEvolution.map((month, index) =>
-    index === monthlyEvolution.length - 1
-      ? { ...month, income: incomeTotal, expenses: expenseTotal }
-      : month,
-  );
 
   return (
     <div className="min-h-screen bg-[#f7f8f6] text-slate-900">
@@ -126,29 +70,29 @@ export function DashboardClient({
         </div>
 
         <section aria-label="Resumo financeiro" className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-          <SummaryCard kind="balance" label="Saldo disponível" amount={balance} />
-          <SummaryCard kind="income" label="Total de receitas" amount={incomeTotal} />
-          <SummaryCard kind="expense" label="Total de despesas" amount={expenseTotal} />
+          <SummaryCard kind="balance" label="Saldo disponível" amount={data.summary.balance} />
+          <SummaryCard kind="income" label="Total de receitas" amount={data.summary.income} />
+          <SummaryCard kind="expense" label="Total de despesas" amount={data.summary.expenses} />
         </section>
 
         <section className="mt-6 grid gap-6 xl:grid-cols-[minmax(0,1.65fr)_minmax(320px,1fr)]">
-          <FinancialEvolution data={currentMonthEvolution} />
-          <CategorySpending categories={updatedCategories} />
+          <FinancialEvolution data={data.monthlyEvolution} />
+          <CategorySpending categories={data.categories} />
         </section>
 
         <section className="mt-6">
-          <RecentTransactions transactions={transactions} />
+          <RecentTransactions transactions={data.transactions} />
         </section>
 
         <p className="mt-8 text-center text-xs text-slate-500">
-          Valores fictícios para demonstração. Movimentações adicionadas ficam disponíveis nesta sessão.
+          Valores fictícios para demonstração. Movimentações salvas ficam associadas ao usuário local.
         </p>
       </main>
 
       {activeForm && (
         <MovementFormDialog
           type={activeForm}
-          onCancel={handleCancelIncome}
+          onCancel={handleCancel}
           onSave={handleSaveMovement}
         />
       )}
