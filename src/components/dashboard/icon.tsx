@@ -4,6 +4,8 @@ type IconName =
   | "brand"
   | "chevron-left"
   | "chevron-right"
+  | "close"
+  | "check"
   | "income"
   | "expense"
   | "balance"
@@ -22,6 +24,8 @@ const paths: Record<IconName, string> = {
   brand: "M4 18V9m5 9V5m5 13v-6m5 6V8M3 20h18",
   "chevron-left": "m15 18-6-6 6-6",
   "chevron-right": "m9 18 6-6-6-6",
+  close: "M18 6 6 18M6 6l12 12",
+  check: "m5 12 4 4L19 6",
   income: "M7 17 17 7M7 7h10v10",
   expense: "M7 7 17 17M17 7v10H7",
   balance: "M3 7h18v13H3zM3 7l2-3h14l2 3M16 13h5",

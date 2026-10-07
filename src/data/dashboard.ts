@@ -17,7 +17,28 @@ export type Transaction = {
   date: string;
   amount: number;
   type: "income" | "expense";
+  account?: string;
+  observation?: string;
 };
+
+export type NewMovement = Omit<Transaction, "id" | "type">;
+
+export const incomeCategories = [
+  "Salário",
+  "Freelance",
+  "Investimentos",
+  "Outros",
+] as const;
+
+export const expenseCategories = [
+  "Alimentação",
+  "Moradia",
+  "Transporte",
+  "Lazer",
+  "Outros",
+] as const;
+
+export const accounts = ["Conta corrente", "Conta poupança", "Dinheiro"] as const;
 
 export const categories: SpendingCategory[] = [
   { name: "Alimentação", amount: 1200, color: "bg-emerald-600" },
